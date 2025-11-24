@@ -4,6 +4,17 @@ from flask import g
 
 DB_PATH = os.path.join("instance", "steamcatalog.db")
 
+print("=== DB DEBUG ===")
+print("DB PATH:", DB_PATH)
+print("ABS PATH:", os.path.abspath(DB_PATH))
+print("DB EXISTS:", os.path.exists(DB_PATH))
+try:
+    print("INSTANCE CONTENTS:", os.listdir("instance"))
+except Exception as e:
+    print("INSTANCE ERROR:", e)
+print("===============")
+
+
 def get_db():
     if 'db' not in g:
         g.db = sqlite3.connect(DB_PATH)
