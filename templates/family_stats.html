@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1 class="text-3xl font-bold text-blue-300 mb-6">Family Stats</h1>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    <!-- SIMILARITY MATRIX -->
+    <div class="bg-gray-800 p-6 rounded shadow">
+        <h2 class="text-xl font-bold mb-4">Taste Similarity</h2>
+        <canvas id="similarityChart" height="220"></canvas>
+    </div>
+
+    <!-- GENRE AVERAGES -->
+    <div class="bg-gray-800 p-6 rounded shadow">
+        <h2 class="text-xl font-bold mb-4">Average Rating by Genre</h2>
+        <canvas id="genreChart" height="220"></canvas>
+    </div>
+
+    <!-- MOST PLAYED GAME -->
+    <div class="bg-gray-800 p-6 rounded shadow col-span-1 lg:col-span-2">
+        <h2 class="text-xl font-bold mb-4">Most Played Game (Per Person)</h2>
+
+        <table class="w-full text-left text-gray-200">
+            <thead>
+                <tr class="border-b border-gray-600">
+                    <th class="py-2">User</th>
+                    <th class="py-2">Most Played</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr class="border-b border-gray-700">
+                    <td class="py-2 font-semibold">{{ u.display_name }}</td>
+                    <td class="py-2">{{ most_played[u.id] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // ===========================
+    // DATA FROM BACKEND
+    // ===========================
+    const users = {{ users | tojson }};
+    const similarity = {{ similarity | tojson }};
+    const genre_avgs = {{ genre_avgs | tojson }};
+
+    // ===========================
+    // SIMILARITY MATRIX CHART
+    // ===========================
+    const simLabels = users.map(u => u.display_name);
+
+    const simData = {
+        labels: simLabels,
+        datasets: users.map((u, idx) => ({
+            label: u.display_name,
+            data: simLabels.map((_, j) => similarity[u.id][users[j].id]),
+            borderWidth: 1,
+            fill: false
+        }))
+    };
+
+    new Chart(document.getElementById("similarityChart"), {
+        type: 'radar',
+        data: simData,
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } },
+            scales: { r: { min: 0, max: 1 } }
+        }
+    });
+
+    // ===========================
+    // GENRE AVERAGE RATINGS CHART
+    // ===========================
+    const allGenres = new Set();
+    for (let uid in genre_avgs) {
+        for (let tag in genre_avgs[uid]) {
+            allGenres.add(tag);
+        }
+    }
+
+    const genreList = Array.from(allGenres);
+
+    const genreData = {
+        labels: genreList,
+        datasets: users.map((u, idx) => ({
+            label: u.display_name,
+            data: genreList.map(tag => genre_avgs[u.id]?.[tag] || 0),
+            borderWidth: 2,
+            fill: false
+        }))
+    };
+
+    new Chart(document.getElementById("genreChart"), {
+        type: 'line',
+        data: genreData,
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } },
+            scales: { y: { beginAtZero: true, max: 10 } }
+        }
+    });
+</script>
+
+{% endblock %}

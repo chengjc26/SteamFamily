@@ -17,7 +17,12 @@ print("===============")
 
 def get_db():
     if 'db' not in g:
-        g.db = sqlite3.connect(DB_PATH)
+        g.db = sqlite3.connect(
+        DB_PATH,
+        timeout=15,
+        check_same_thread=False
+    )
+
         g.db.row_factory = sqlite3.Row
     return g.db
 
@@ -48,11 +53,14 @@ def init_db():
         appid INTEGER PRIMARY KEY,
         title TEXT,
         cover_url TEXT,
+        custom_cover_url TEXT,
         description TEXT,
         genres TEXT,
-        release_year INTEGER
+        release_year INTEGER,
+        tags TEXT
     );
     """)
+
 
     # NEW: Owned games table
     db.execute("""

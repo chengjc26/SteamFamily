@@ -3,87 +3,166 @@
 
 {% block content %}
 
+<!-- TITLE -->
 <h1 class="text-3xl font-bold mb-6 text-blue-300">
     {{ game.title }}
 </h1>
 
-<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+<!-- 3-COLUMN GRID WITH TUNED WIDTHS -->
+<div class="grid grid-cols-1 md:grid-cols-[380px_650px_1fr] gap-8 items-start">
 
-    <!-- LEFT COLUMN: COVER -->
-    <div>
+    <!-- ========================= -->
+    <!--        LEFT COLUMN        -->
+    <!-- ========================= -->
+    <div class="space-y-4" style="min-width: 380px;">
+
+        <!-- IMAGE -->
         <img src="{{ game.cover_url }}"
-             class="rounded-lg shadow-lg w-full"
+             class="rounded-lg shadow-lg object-contain"
+             style="max-width: 350px; max-height: 450px; width: 100%; height: auto; margin-left: auto; margin-right: auto;"
              onerror="this.src='https://placehold.co/400x600?text=No+Cover';">
     </div>
 
-    <!-- RIGHT COLUMN: DETAILS -->
-    <div class="md:col-span-2 space-y-8">
+    <!-- ========================= -->
+    <!--       MIDDLE COLUMN       -->
+    <!-- ========================= -->
+    <div class="space-y-6 px-2 max-w-[650px]">
 
-        <!-- HOURS SECTION -->
-        <div class="bg-gray-800 p-6 rounded-lg shadow">
-            <h2 class="text-xl font-semibold mb-4 text-blue-200">Playtime</h2>
+        <!-- METADATA -->
+        <div class="bg-gray-800 p-4 rounded-lg shadow space-y-3">
 
-            <p class="text-gray-300 mb-4">
-                Current Hours: <span class="font-bold">{{ hours | float | round(1) }}</span>
+            {% if game.release_year %}
+            <p class="text-gray-300">
+                <span class="font-semibold text-blue-200">Release Year:</span>
+                {{ game.release_year }}
             </p>
+            {% endif %}
 
-            <form action="{{ url_for('catalog.update_hours', appid=game.appid) }}"
-                  method="POST" class="space-y-3">
-
-                <label class="block text-gray-300">Update Hours</label>
-                <input type="text"
-                        name="hours"
-                        value="{{ hours | float | round(1) }}"
-                        class="w-full p-2 rounded bg-gray-700 text-gray-200">
-
-
-                <button class="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded">
-                    Save Hours
-                </button>
-            </form>
-        </div>
-
-        <!-- RATING + NOTES -->
-        <div class="bg-gray-800 p-6 rounded-lg shadow">
-            <h2 class="text-xl font-semibold mb-4 text-blue-200">Your Entry</h2>
-
-            <form action="{{ url_for('catalog.save_entry', appid=game.appid) }}"
-                  method="POST"
-                  class="space-y-4">
-
-                <!-- Rating -->
-                <div>
-                    <label class="text-gray-300 block mb-1">Rating</label>
-                    <input type="text"
-                            name="rating"
-                            value="{{ user_rating if user_rating != None else '' }}"
-                            class="w-full p-2 rounded bg-gray-700 text-gray-200">
-
+            {% if game.tags %}
+            <div>
+                <span class="font-semibold text-purple-300">Tags:</span>
+                <div class="flex flex-wrap gap-2 mt-2">
+                    {% for tag in game.tags.split(",") %}
+                        <span class="px-3 py-1 bg-gray-700 text-gray-200 rounded-full text-sm">
+                            {{ tag.strip() }}
+                        </span>
+                    {% endfor %}
                 </div>
+            </div>
+            {% endif %}
 
-                <!-- Notes -->
-                <div>
-                    <label class="text-gray-300 block mb-1">Notes</label>
-                    <textarea name="notes"
-                              rows="5"
-                              class="w-full p-2 rounded bg-gray-700 text-gray-200">{{ user_notes }}</textarea>
-                </div>
-
-                <button class="w-full px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded">
-                    Save Entry
-                </button>
-            </form>
         </div>
 
         <!-- DESCRIPTION -->
-        <div class="bg-gray-800 p-6 rounded-lg shadow">
+        <div class="bg-gray-800 p-4 rounded-lg shadow">
             <h2 class="text-xl font-semibold mb-3 text-blue-200">Description</h2>
-            <p class="text-gray-300 whitespace-pre-wrap">
-                {{ game.description if game.description else "No description available." }}
-            </p>
+
+            <!-- Remove ALL internal padding and indent -->
+            <div class="pl-0 ml-0">
+                <p class="text-gray-300 whitespace-normal text-left">
+                    {{ game.description | trim }}
+                </p>
+
+            </div>
+        </div>
+
+
+    </div>
+
+    <!-- ========================= -->
+    <!--        RIGHT COLUMN       -->
+    <!-- ========================= -->
+    <div class="space-y-6 pl-2">
+
+        <!-- TABS -->
+        <div class="flex space-x-4 mb-4 border-b border-gray-700 pb-2">
+            <button class="tab-btn text-blue-300 font-semibold" onclick="switchTab('your-entry')">Your Entry</button>
+            <button class="tab-btn text-gray-300 hover:text-blue-300" onclick="switchTab('family-ratings')">Family Ratings</button>
+            <button class="tab-btn text-gray-300 hover:text-blue-300" onclick="switchTab('family-notes')">Family Notes</button>
+        </div>
+
+        <!-- YOUR ENTRY -->
+        <div id="tab-your-entry" class="tab-content">
+            <form action="{{ url_for('catalog.save_all', appid=game.appid) }}" method="POST" class="space-y-6">
+
+                <div class="bg-gray-800 p-6 rounded-lg shadow">
+                    <h2 class="text-xl font-semibold mb-4 text-blue-200">Playtime</h2>
+                    <label class="block text-gray-300 mb-1">Hours</label>
+                    <input type="text" name="hours" value="{{ hours | float | round(1) }}"
+                           class="w-full p-2 rounded bg-gray-700 text-gray-200">
+                </div>
+
+                <div class="bg-gray-800 p-6 rounded-lg shadow">
+                    <h2 class="text-xl font-semibold mb-4 text-blue-200">Your Entry</h2>
+
+                    <label class="text-gray-300 block mb-1">Rating</label>
+                    <input type="text" name="rating" value="{{ user_rating if user_rating != None else '' }}"
+                           class="w-full p-2 rounded bg-gray-700 text-gray-200">
+
+                    <label class="text-gray-300 block mt-4 mb-1">Notes</label>
+                    <textarea name="notes" rows="4"
+                              class="w-full p-2 rounded bg-gray-700 text-gray-200">{{ user_notes }}</textarea>
+                </div>
+
+                <button class="w-full px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded text-lg font-bold">
+                    Save All Changes
+                </button>
+            </form>
+        </div>
+
+        <!-- FAMILY RATINGS -->
+        <div id="tab-family-ratings" class="tab-content hidden">
+            <div class="bg-gray-800 p-6 rounded-lg shadow space-y-3">
+                {% if family %}
+                    {% for member in family %}
+                        <div class="border-b border-gray-700 pb-2">
+                            <p class="font-semibold text-gray-200">{{ member.display_name }}</p>
+                            {% if member.rating %}
+                                <p class="text-yellow-400">⭐ {{ member.rating }}/10</p>
+                            {% else %}
+                                <p class="text-gray-500">No rating</p>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-gray-400">No family entries yet.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- FAMILY NOTES -->
+        <div id="tab-family-notes" class="tab-content hidden">
+            <div class="bg-gray-800 p-6 rounded-lg shadow space-y-4">
+                {% if family %}
+                    {% for member in family %}
+                        {% if member.notes %}
+                            <div class="border-b border-gray-700 pb-3">
+                                <p class="font-semibold text-gray-200">{{ member.display_name }}</p>
+                                <p class="italic text-gray-400">"{{ member.notes }}"</p>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <p class="text-gray-400">No notes yet.</p>
+                {% endif %}
+            </div>
         </div>
 
     </div>
 </div>
+
+<!-- TAB SWITCHER -->
+<script>
+function switchTab(tab) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.tab-btn').forEach(el => {
+        el.classList.remove('text-blue-300', 'font-semibold');
+        el.classList.add('text-gray-300');
+    });
+    document.getElementById('tab-' + tab).classList.remove('hidden');
+    event.target.classList.remove('text-gray-300');
+    event.target.classList.add('text-blue-300', 'font-semibold');
+}
+</script>
 
 {% endblock %}

@@ -3,36 +3,53 @@
 
 <h1 class="text-3xl font-bold mb-6 text-blue-300">Family Library</h1>
 
-<!-- MATCH GAMES PAGE GRID -->
+<div class="flex gap-4 mb-4">
+    <a href="{{ url_for('catalog.family', sort='alpha') }}"
+       class="px-3 py-1 rounded {{ 'bg-blue-600' if sort=='alpha' else 'bg-gray-700' }}">
+        A–Z
+    </a>
+
+    <a href="{{ url_for('catalog.family', sort='hours') }}"
+       class="px-3 py-1 rounded {{ 'bg-blue-600' if sort=='hours' else 'bg-gray-700' }}">
+        Total Hours
+    </a>
+
+    <a href="{{ url_for('catalog.family', sort='rating') }}"
+       class="px-3 py-1 rounded {{ 'bg-blue-600' if sort=='rating' else 'bg-gray-700' }}">
+        Avg Rating
+    </a>
+</div>
+
+
 <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
 
     {% for game in games %}
 
-    <!-- Card container (NOT a link anymore) -->
     <div class="group bg-gray-800 rounded-lg shadow hover:shadow-xl transition-all">
 
-        <!-- COVER BLOCK -->
+        <!-- COVER -->
         <div class="relative overflow-hidden rounded-t-lg">
 
-            <!-- CLICKABLE IMAGE ONLY -->
             <a href="{{ url_for('catalog.game_detail', appid=game.appid) }}">
                 <img src="{{ game.cover_url }}"
-                    onerror="this.src='https://placehold.co/600x900?text=No+Cover';"
-                    class="w-full h-auto">
+                     onerror="this.src='https://placehold.co/600x900?text=No+Cover';"
+                     class="w-full h-auto">
             </a>
 
-            <!-- AVATARS -->
+            <!-- SORTED AVATARS -->
             <div class="absolute top-2 left-2 flex space-x-1 z-20">
 
-                {% for member in game.members %}
+                {% set sorted = game.members|sort(attribute='hours', reverse=True) %}
+
+                {% for member in sorted %}
                     {% if member.hours and member.hours|float > 0 %}
 
                     <div class="group/avatar relative">
 
                         <img src="{{ member.avatar_url }}"
-                            class="w-7 h-7 rounded-full border border-gray-900 shadow">
+                             class="w-7 h-7 rounded-full border border-gray-900 shadow">
 
-                        <div class="absolute left-9 top-0 bg-black/90 text-sm p-3 rounded shadow-xl 
+                        <div class="absolute left-9 top-0 bg-black/90 text-sm p-3 rounded shadow-xl
                                     hidden group-hover/avatar:block w-56 z-50 pointer-events-auto">
 
                             <p class="font-semibold">{{ member.display_name }}</p>
@@ -62,20 +79,16 @@
 
             </div>
 
-
         </div>
 
-        <!-- LOWER CONTENT BLOCK -->
+        <!-- LOWER BLOCK -->
         <div class="p-3">
 
-            <!-- TITLE (clickable) -->
             <a href="{{ url_for('catalog.game_detail', appid=game.appid) }}">
-                <h2 class="text-base font-semibold mb-2 truncate">
-                    {{ game.title }}
-                </h2>
+                <h2 class="text-base font-semibold mb-2 truncate">{{ game.title }}</h2>
             </a>
 
-            <!-- YOUR RATING (NOW SAFE TO CLICK) -->
+            <!-- YOUR RATING -->
             <div class="flex items-center justify-between mb-1">
                 <p class="text-gray-300 text-xs">Your rating:</p>
 
@@ -95,11 +108,15 @@
                 {% endfor %}
             </div>
 
-            <!-- FAMILY AVERAGE -->
+            <!-- FAMILY AVG + TOTAL HOURS -->
             {% set ratings = [] %}
+            {% set total_hours = 0 %}
             {% for member in game.members %}
                 {% if member.rating %}
                     {% set _ = ratings.append(member.rating) %}
+                {% endif %}
+                {% if member.hours %}
+                    {% set total_hours = total_hours + member.hours %}
                 {% endif %}
             {% endfor %}
 
@@ -112,13 +129,14 @@
                 {% endif %}
             </p>
 
+            <p class="text-gray-400 text-xs">
+                Total hours: {{ game.total_hours|round(1) }}
+            </p>
+
         </div>
 
     </div>
-
     {% endfor %}
-
-
 </div>
 
 

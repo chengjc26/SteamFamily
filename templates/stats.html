@@ -3,72 +3,56 @@
 
 <h1 class="text-3xl font-bold mb-6 text-blue-300">Your Stats</h1>
 
+<!-- Grid: 2 charts per row -->
 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
     <!-- Total Hours -->
-    <div class="bg-gray-800 p-6 rounded shadow">
+    <div class="bg-gray-800 p-4 rounded shadow">
         <h2 class="text-xl font-bold mb-4">Total Hours</h2>
         <p class="text-4xl text-blue-400 font-bold">{{ total_hours|round(1) }}</p>
     </div>
 
     <!-- Rating Stats -->
-    <div class="bg-gray-800 p-6 rounded shadow flex flex-col justify-center">
-        <p class="text-xl mb-2 font-semibold">
+    <div class="bg-gray-800 p-4 rounded shadow">
+        <h2 class="text-xl font-bold mb-4">Ratings</h2>
+        <p class="text-lg">
             Average Rating:
-            <span class="text-yellow-400 font-bold text-2xl ml-1">
+            <span class="text-yellow-400 font-bold text-2xl">
                 {{ avg_rating|round(2) if avg_rating else "N/A" }}
             </span>
         </p>
-        <p class="text-lg text-gray-300">
+        <p class="text-lg text-gray-300 mt-1">
             Rated Games:
             <span class="font-semibold text-gray-100">{{ rated_count }}</span>
         </p>
     </div>
 
-    <!-- Hours Per Genre -->
+    <!-- Hours by Tag -->
     <div class="bg-gray-800 p-6 rounded shadow">
-        <h2 class="text-xl font-bold mb-4">Hours by Genre</h2>
-        <canvas id="genreChart" style="max-height: 300px;"></canvas>
+        <h2 class="text-xl font-bold mb-4">Top Tags by Hours</h2>
+        <canvas id="genreChart" style="max-height: 400px;"></canvas>
     </div>
 
-    <!-- Games Per Genre -->
+    <!-- Games per Tag -->
     <div class="bg-gray-800 p-6 rounded shadow">
-        <h2 class="text-xl font-bold mb-4">Games Per Genre</h2>
-        <canvas id="genrePieChart" style="max-height: 300px;"></canvas>
+        <h2 class="text-xl font-bold mb-4">Top Tags by Count</h2>
+        <canvas id="genrePieChart" style="max-height: 400px;"></canvas>
     </div>
 
-    <!-- Top Games by Hours -->
-    <div class="bg-gray-800 p-6 rounded shadow col-span-1 md:col-span-2">
-        <h2 class="text-xl font-bold mb-4">Top Games by Hours</h2>
+    <!-- Games per Release Year -->
+    <div class="bg-gray-800 p-4 rounded shadow h-64">
+        <h2 class="text-xl font-bold mb-2">Games by Release Year</h2>
+        <div class="h-48">
+            <canvas id="gamesByYear"></canvas>
+        </div>
+    </div>
 
-        <table class="w-full text-left">
-            <thead>
-                <tr class="text-blue-300 border-b border-gray-600">
-                    <th class="py-2 w-20">Cover</th>
-                    <th class="py-2">Game</th>
-                    <th class="py-2 w-24">Hours</th>
-                </tr>
-            </thead>
-
-            <tbody>
-                {% for row in top_rows %}
-                <tr class="border-b border-gray-700">
-
-                    <td class="py-2">
-                        <div class="cover-container">
-                            <img src="{{ row.cover_url }}"
-                                 class="cover-img"
-                                 onerror="this.src='https://placehold.co/400x600?text=No+Cover';">
-                        </div>
-                    </td>
-
-                    <td class="py-2 font-semibold">{{ row.title }}</td>
-                    <td class="py-2 text-blue-400 font-bold">{{ row.hours|round(1) }}</td>
-
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <!-- Rating Distribution -->
+    <div class="bg-gray-800 p-4 rounded shadow h-64">
+        <h2 class="text-xl font-bold mb-2">Rating Distribution (1–10)</h2>
+        <div class="h-48">
+            <canvas id="ratingDist"></canvas>
+        </div>
     </div>
 
 </div>
@@ -76,12 +60,11 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-    // ============================================
-    // Hours By Genre (Bar Chart)
-    // ============================================
-
-    const hoursGenreLabels = JSON.parse('{{ hours_genre_labels | tojson }}');
-    const hoursGenreData = JSON.parse('{{ hours_genre_data | tojson }}');
+    // ================================
+    // Hours by Tag
+    // ================================
+    const hoursGenreLabels = JSON.parse('{{ hours_tag_labels | tojson }}');
+    const hoursGenreData = JSON.parse('{{ hours_tag_data | tojson }}');
 
     new Chart(document.getElementById('genreChart'), {
         type: 'bar',
@@ -90,38 +73,106 @@
             datasets: [{
                 label: 'Hours',
                 data: hoursGenreData,
-                backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                backgroundColor: 'rgba(54, 162, 235, 0.7)',
                 borderColor: 'rgb(54, 162, 235)',
                 borderWidth: 1
             }]
         },
         options: {
+            indexAxis: 'y',
             plugins: { legend: { display: false } },
+            responsive: true,
             scales: {
-                y: { beginAtZero: true, ticks: { color: "#ddd" }},
-                x: { ticks: { color: "#ddd" }}
+                x: { ticks: { color: "#ddd" }, beginAtZero: true },
+                y: {
+                    ticks: {
+                        color: "#ddd",
+                        autoSkip: false,
+                        maxRotation: 0,
+                        minRotation: 0,
+                        font: { size: 12 }
+                    }
+                }
             }
         }
     });
 
-    // ============================================
-    // Games Per Genre (Pie Chart)
-    // ============================================
-
-    const genreLabels = JSON.parse('{{ genre_labels | tojson }}');
-    const genreData = JSON.parse('{{ genre_data | tojson }}');
+    // ================================
+    // Games per Tag
+    // ================================
+    const genreLabels = JSON.parse('{{ tag_labels | tojson }}');
+    const genreData = JSON.parse('{{ tag_data | tojson }}');
 
     new Chart(document.getElementById('genrePieChart'), {
-        type: 'pie',
+        type: 'bar',
         data: {
             labels: genreLabels,
             datasets: [{
+                label: 'Games',
                 data: genreData,
-                borderWidth: 0
+                backgroundColor: 'rgba(255, 159, 64, 0.7)',
+                borderColor: 'rgb(255, 159, 64)',
+                borderWidth: 1
             }]
         },
         options: {
-            plugins: { legend: { labels: { color: "#ddd" } } }
+            indexAxis: 'y',
+            plugins: { legend: { display: false } },
+            responsive: true,
+            scales: {
+                x: { ticks: { color: "#ddd" }, beginAtZero: true },
+                y: {
+                    ticks: {
+                        color: "#ddd",
+                        autoSkip: false,
+                        maxRotation: 0,
+                        minRotation: 0,
+                        font: { size: 12 }
+                    }
+                }
+            }
+        }
+    });
+
+    // ================================
+    // Games per Release Year
+    // ================================
+    new Chart(document.getElementById("gamesByYear"), {
+        type: "line",
+        data: {
+            labels: {{ year_labels | tojson }},
+            datasets: [{
+                label: "Games Released",
+                data: {{ year_counts | tojson }},
+                fill: false,
+                borderColor: "rgb(75, 192, 192)",
+                tension: 0.2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+
+    // ================================
+    // Rating Distribution
+    // ================================
+    new Chart(document.getElementById("ratingDist"), {
+        type: "bar",
+        data: {
+            labels: {{ rating_labels | tojson }},
+            datasets: [{
+                label: "Games",
+                data: {{ rating_counts | tojson }},
+                backgroundColor: "rgba(153, 102, 255, 0.7)"
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: { y: { beginAtZero: true } }
         }
     });
 </script>
