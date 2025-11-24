@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Your Profile{% endblock %}
+
+{% block content %}
+
+<h1 class="text-3xl font-bold text-blue-300 mb-6">Your Profile</h1>
+
+<div class="bg-gray-800 p-6 rounded-lg shadow flex flex-col md:flex-row gap-6">
+
+    <!-- LEFT COLUMN — AVATAR + BASIC INFO -->
+    <div class="flex flex-col items-center md:w-1/4">
+
+        <!-- Steam Avatar -->
+        <img src="{{ user.avatar_url }}" class="w-32 h-32 rounded-full shadow mb-4">
+
+        <!-- Username -->
+        <h2 class="text-2xl font-bold text-gray-100">{{ user.username }}</h2>
+
+        <!-- Steam display name -->
+        <p class="text-gray-400">{{ user.display_name }}</p>
+
+        <!-- SteamID -->
+        <p class="text-gray-600 text-xs mt-1">SteamID: {{ user.steamid }}</p>
+
+    </div>
+
+    <!-- RIGHT COLUMN — STATS + OVERVIEW -->
+    <div class="flex-1">
+
+        <!-- STAT CARDS -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+
+            <!-- Total Hours -->
+            <div class="bg-gray-700 p-4 rounded text-center">
+                <p class="text-gray-400">Total Hours</p>
+                <p class="text-2xl text-blue-300 font-bold">{{ total_hours|round(1) }}</p>
+            </div>
+
+            <!-- Average Rating -->
+            <div class="bg-gray-700 p-4 rounded text-center">
+                <p class="text-gray-400">Average Rating</p>
+                {% if avg_rating %}
+                <p class="text-2xl text-yellow-300 font-bold">{{ (avg_rating/10)|round(1) }}/10</p>
+                {% else %}
+                <p class="text-gray-500 text-xl">—</p>
+                {% endif %}
+            </div>
+
+            <!-- Games Rated -->
+            <div class="bg-gray-700 p-4 rounded text-center">
+                <p class="text-gray-400">Games Rated</p>
+                <p class="text-2xl text-green-300 font-bold">{{ rated_count }}</p>
+            </div>
+
+        </div>
+
+        <!-- RECENTLY RATED GAMES -->
+        <h2 class="text-xl font-semibold mb-3">Recently Rated</h2>
+
+        {% if recent %}
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {% for g in recent %}
+            <a href="{{ url_for('catalog.game_detail', appid=g.appid) }}"
+                class="bg-gray-700 rounded-lg overflow-hidden hover:shadow-xl hover:-translate-y-1 transition">
+
+                <img src="{{ g.cover_url }}" onerror="this.src='https://placehold.co/600x900?text=No+Cover';"
+                    class="w-full h-auto">
+
+                <div class="p-2">
+                    <p class="text-gray-100 truncate">{{ g.title }}</p>
+                    {% if g.rating %}
+                    <p class="text-yellow-300 text-sm">⭐ {{ (g.rating/10)|round(1) }}/10</p>
+                    {% endif %}
+                </div>
+
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-gray-500">You haven't rated any games yet.</p>
+        {% endif %}
+
+    </div>
+</div>
+
+
+{% endblock %}

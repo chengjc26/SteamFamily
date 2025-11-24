@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: steam-catalog
+    runtime: python3
+    region: oregon
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app:app"
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+    disk:
+      name: dbdisk
+      mountPath: /opt/render/project/src/instance
+      sizeGB: 1
+
+cronJobs:
+  - name: daily_steam_sync
+    schedule: "0 0 * * *"
+    command: "python services/steam_sync.py"

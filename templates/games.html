@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Games{% endblock %}
+
+{% block content %}
+
+<h1 class="text-3xl font-bold mb-6 text-blue-300">Game Catalog</h1>
+
+<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+
+    {% for game in games %}
+    <a href="{{ url_for('catalog.game_detail', appid=game['appid']) }}"
+       class="group bg-gray-800 rounded-lg overflow-hidden shadow hover:shadow-xl hover:-translate-y-1 transition-all">
+
+        <!-- GLOBAL POSTER COVER -->
+        <div class="cover-container relative">
+            <img src="{{ game.cover_url }}"
+                 class="cover-img"
+                 onerror="this.src='https://placehold.co/400x600?text=No+Cover';">
+
+            <!-- Hover Hours Overlay -->
+            <div class="absolute inset-0 bg-black bg-opacity-40 opacity-0
+                        group-hover:opacity-100 transition flex items-center justify-center
+                        text-lg font-bold">
+                {{  game.hours | float | round(1)  }} hrs
+            </div>
+        </div>
+
+        <div class="p-3">
+
+            <h3 class="font-semibold text-gray-100 truncate">
+                {{ game.title }}
+            </h3>
+
+            {% if game.user_rating %}
+            <p class="text-yellow-400 text-sm mt-1">
+                ⭐ {{ game.user_rating }}
+            </p>
+            {% else %}
+            <p class="text-gray-500 text-sm mt-1">No rating</p>
+            {% endif %}
+
+            <p class="text-blue-300 text-sm mt-1">
+                {{ game.hours | float | round(1) }} hrs
+            </p>
+
+        </div>
+
+    </a>
+    {% endfor %}
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}{{ game.title }}{% endblock %}
+
+{% block content %}
+
+<h1 class="text-3xl font-bold mb-6 text-blue-300">
+    {{ game.title }}
+</h1>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+
+    <!-- LEFT COLUMN: COVER -->
+    <div>
+        <img src="{{ game.cover_url }}"
+             class="rounded-lg shadow-lg w-full"
+             onerror="this.src='https://placehold.co/400x600?text=No+Cover';">
+    </div>
+
+    <!-- RIGHT COLUMN: DETAILS -->
+    <div class="md:col-span-2 space-y-8">
+
+        <!-- HOURS SECTION -->
+        <div class="bg-gray-800 p-6 rounded-lg shadow">
+            <h2 class="text-xl font-semibold mb-4 text-blue-200">Playtime</h2>
+
+            <p class="text-gray-300 mb-4">
+                Current Hours: <span class="font-bold">{{ hours | float | round(1) }}</span>
+            </p>
+
+            <form action="{{ url_for('catalog.update_hours', appid=game.appid) }}"
+                  method="POST" class="space-y-3">
+
+                <label class="block text-gray-300">Update Hours</label>
+                <input type="text"
+                        name="hours"
+                        value="{{ hours | float | round(1) }}"
+                        class="w-full p-2 rounded bg-gray-700 text-gray-200">
+
+
+                <button class="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded">
+                    Save Hours
+                </button>
+            </form>
+        </div>
+
+        <!-- RATING + NOTES -->
+        <div class="bg-gray-800 p-6 rounded-lg shadow">
+            <h2 class="text-xl font-semibold mb-4 text-blue-200">Your Entry</h2>
+
+            <form action="{{ url_for('catalog.save_entry', appid=game.appid) }}"
+                  method="POST"
+                  class="space-y-4">
+
+                <!-- Rating -->
+                <div>
+                    <label class="text-gray-300 block mb-1">Rating</label>
+                    <input type="text"
+                            name="rating"
+                            value="{{ user_rating if user_rating != None else '' }}"
+                            class="w-full p-2 rounded bg-gray-700 text-gray-200">
+
+                </div>
+
+                <!-- Notes -->
+                <div>
+                    <label class="text-gray-300 block mb-1">Notes</label>
+                    <textarea name="notes"
+                              rows="5"
+                              class="w-full p-2 rounded bg-gray-700 text-gray-200">{{ user_notes }}</textarea>
+                </div>
+
+                <button class="w-full px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded">
+                    Save Entry
+                </button>
+            </form>
+        </div>
+
+        <!-- DESCRIPTION -->
+        <div class="bg-gray-800 p-6 rounded-lg shadow">
+            <h2 class="text-xl font-semibold mb-3 text-blue-200">Description</h2>
+            <p class="text-gray-300 whitespace-pre-wrap">
+                {{ game.description if game.description else "No description available." }}
+            </p>
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}

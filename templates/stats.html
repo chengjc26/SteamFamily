@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1 class="text-3xl font-bold mb-6 text-blue-300">Your Stats</h1>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+    <!-- Total Hours -->
+    <div class="bg-gray-800 p-6 rounded shadow">
+        <h2 class="text-xl font-bold mb-4">Total Hours</h2>
+        <p class="text-4xl text-blue-400 font-bold">{{ total_hours|round(1) }}</p>
+    </div>
+
+    <!-- Rating Stats -->
+    <div class="bg-gray-800 p-6 rounded shadow flex flex-col justify-center">
+        <p class="text-xl mb-2 font-semibold">
+            Average Rating:
+            <span class="text-yellow-400 font-bold text-2xl ml-1">
+                {{ avg_rating|round(2) if avg_rating else "N/A" }}
+            </span>
+        </p>
+        <p class="text-lg text-gray-300">
+            Rated Games:
+            <span class="font-semibold text-gray-100">{{ rated_count }}</span>
+        </p>
+    </div>
+
+    <!-- Hours Per Genre -->
+    <div class="bg-gray-800 p-6 rounded shadow">
+        <h2 class="text-xl font-bold mb-4">Hours by Genre</h2>
+        <canvas id="genreChart" style="max-height: 300px;"></canvas>
+    </div>
+
+    <!-- Games Per Genre -->
+    <div class="bg-gray-800 p-6 rounded shadow">
+        <h2 class="text-xl font-bold mb-4">Games Per Genre</h2>
+        <canvas id="genrePieChart" style="max-height: 300px;"></canvas>
+    </div>
+
+    <!-- Top Games by Hours -->
+    <div class="bg-gray-800 p-6 rounded shadow col-span-1 md:col-span-2">
+        <h2 class="text-xl font-bold mb-4">Top Games by Hours</h2>
+
+        <table class="w-full text-left">
+            <thead>
+                <tr class="text-blue-300 border-b border-gray-600">
+                    <th class="py-2 w-20">Cover</th>
+                    <th class="py-2">Game</th>
+                    <th class="py-2 w-24">Hours</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for row in top_rows %}
+                <tr class="border-b border-gray-700">
+
+                    <td class="py-2">
+                        <div class="cover-container">
+                            <img src="{{ row.cover_url }}"
+                                 class="cover-img"
+                                 onerror="this.src='https://placehold.co/400x600?text=No+Cover';">
+                        </div>
+                    </td>
+
+                    <td class="py-2 font-semibold">{{ row.title }}</td>
+                    <td class="py-2 text-blue-400 font-bold">{{ row.hours|round(1) }}</td>
+
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    // ============================================
+    // Hours By Genre (Bar Chart)
+    // ============================================
+
+    const hoursGenreLabels = JSON.parse('{{ hours_genre_labels | tojson }}');
+    const hoursGenreData = JSON.parse('{{ hours_genre_data | tojson }}');
+
+    new Chart(document.getElementById('genreChart'), {
+        type: 'bar',
+        data: {
+            labels: hoursGenreLabels,
+            datasets: [{
+                label: 'Hours',
+                data: hoursGenreData,
+                backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                borderColor: 'rgb(54, 162, 235)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { color: "#ddd" }},
+                x: { ticks: { color: "#ddd" }}
+            }
+        }
+    });
+
+    // ============================================
+    // Games Per Genre (Pie Chart)
+    // ============================================
+
+    const genreLabels = JSON.parse('{{ genre_labels | tojson }}');
+    const genreData = JSON.parse('{{ genre_data | tojson }}');
+
+    new Chart(document.getElementById('genrePieChart'), {
+        type: 'pie',
+        data: {
+            labels: genreLabels,
+            datasets: [{
+                data: genreData,
+                borderWidth: 0
+            }]
+        },
+        options: {
+            plugins: { legend: { labels: { color: "#ddd" } } }
+        }
+    });
+</script>
+
+{% endblock %}
