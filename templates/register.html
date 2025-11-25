@@ -13,8 +13,24 @@
         <label>Password</label>
         <input type="password" name="password" class="w-full p-2 bg-gray-700 rounded mb-4">
 
-        <label>SteamID64</label>
-        <input name="steamid" class="w-full p-2 bg-gray-700 rounded mb-6">
+        <label class="font-semibold">SteamID64</label>
+        <input 
+            name="steamid" 
+            class="w-full p-2 bg-gray-700 rounded mb-1"
+            pattern="[0-9]{17}"
+            maxlength="17"
+            minlength="17"
+            required
+            placeholder="Enter your 17-digit SteamID64"
+        >
+
+        <p class="text-gray-400 text-sm mb-4">
+            Need help? Find your SteamID64 here:
+            <a href="https://steamid.io/" target="_blank" class="text-blue-400 underline">
+                steamid.io
+            </a>
+        </p>
+
 
         <button class="w-full bg-blue-600 hover:bg-blue-500 p-2 rounded">
             Register
