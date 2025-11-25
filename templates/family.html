@@ -46,8 +46,9 @@
 
                     <div class="group/avatar relative">
 
-                        <img src="{{ member.avatar_url }}"
-                             class="w-7 h-7 rounded-full border border-gray-900 shadow">
+                        <a href="/user/{{ member.user_id }}/stats">
+                            <img src="{{ member.avatar_url }}" class="rounded-full w-8 h-8 hover:opacity-80 transition">
+                        </a>
 
                         <div class="absolute left-9 top-0 bg-black/90 text-sm p-3 rounded shadow-xl
                                     hidden group-hover/avatar:block w-56 z-50 pointer-events-auto">
@@ -73,6 +74,7 @@
                         </div>
 
                     </div>
+
 
                     {% endif %}
                 {% endfor %}

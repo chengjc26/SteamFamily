@@ -3,22 +3,35 @@
 
 <h1 class="text-3xl font-bold text-blue-300 mb-6">Family Stats</h1>
 
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+<div class="grid grid-cols-1 gap-6">
 
-    <!-- SIMILARITY MATRIX -->
-    <div class="bg-gray-800 p-6 rounded shadow">
+    <!-- SIMILARITY CHART -->
+    <div class="bg-gray-800 p-6 rounded shadow w-full col-span-1">
         <h2 class="text-xl font-bold mb-4">Taste Similarity</h2>
-        <canvas id="similarityChart" height="220"></canvas>
+        <div id="simWrapper" class="w-full max-w-full" style="height: 520px; overflow:hidden;">
+            <canvas id="similarityChart"></canvas>
+        </div>
     </div>
 
-    <!-- GENRE AVERAGES -->
-    <div class="bg-gray-800 p-6 rounded shadow">
+    <!-- GENRE AVERAGE CHART -->
+    <div class="bg-gray-800 p-6 rounded shadow w-full col-span-1">
         <h2 class="text-xl font-bold mb-4">Average Rating by Genre</h2>
-        <canvas id="genreChart" height="220"></canvas>
+
+        <select id="genreSort" class="bg-gray-700 text-gray-200 p-2 rounded mb-4">
+            <option value="alpha">Sort: Alphabetical</option>
+            <option value="avg_desc">Sort: Highest Avg → Lowest</option>
+            <option value="avg_asc">Sort: Lowest Avg → Highest</option>
+        </select>
+
+        <div class="overflow-x-auto" style="padding-bottom: 10px;">
+            <div id="genreChartWrapper" class="w-full" style="min-width: 1000px;">
+                <canvas id="genreChart" height="460"></canvas>
+            </div>
+        </div>
     </div>
 
-    <!-- MOST PLAYED GAME -->
-    <div class="bg-gray-800 p-6 rounded shadow col-span-1 lg:col-span-2">
+    <!-- MOST PLAYED TABLE -->
+    <div class="bg-gray-800 p-6 rounded shadow w-full col-span-1">
         <h2 class="text-xl font-bold mb-4">Most Played Game (Per Person)</h2>
 
         <table class="w-full text-left text-gray-200">
@@ -41,26 +54,40 @@
 
 </div>
 
+<!-- SCRIPTS -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <script>
     // ===========================
-    // DATA FROM BACKEND
+    // BACKEND DATA
     // ===========================
     const users = {{ users | tojson }};
     const similarity = {{ similarity | tojson }};
     const genre_avgs = {{ genre_avgs | tojson }};
 
     // ===========================
-    // SIMILARITY MATRIX CHART
+    // Unified User Color Generator
+    // ===========================
+    function userColor(id) {
+        const hue = (id * 47) % 360;   // stable spacing
+        const sat = 55;                // soft but readable
+        const light = 68;              // pastel
+        return `hsl(${hue}, ${sat}%, ${light}%)`;
+    }
+
+    // ===========================
+    // SIMILARITY MATRIX
     // ===========================
     const simLabels = users.map(u => u.display_name);
 
     const simData = {
         labels: simLabels,
-        datasets: users.map((u, idx) => ({
+        datasets: users.map(u => ({
             label: u.display_name,
             data: simLabels.map((_, j) => similarity[u.id][users[j].id]),
-            borderWidth: 1,
+            borderWidth: 2,
+            borderColor: userColor(u.id),
+            pointBackgroundColor: userColor(u.id),
             fill: false
         }))
     };
@@ -70,42 +97,115 @@
         data: simData,
         options: {
             responsive: true,
-            plugins: { legend: { position: 'bottom' } },
-            scales: { r: { min: 0, max: 1 } }
+            maintainAspectRatio: false,
+            animation: false,
+            resizeDelay: 0,
+            interaction: { intersect: false, mode: 'nearest' },
+            plugins: { 
+                legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 8 } }
+            },
+            scales: { 
+                r: {
+                    min: 0, max: 1,
+                    pointLabels: { font: { size: 10 } },
+                    ticks: { display: false }
+                }
+            }
         }
     });
 
     // ===========================
-    // GENRE AVERAGE RATINGS CHART
+    // GENRE CHART BUILD
     // ===========================
+    let genreList = [];
+    let avgPerGenre = [];
+
     const allGenres = new Set();
     for (let uid in genre_avgs) {
-        for (let tag in genre_avgs[uid]) {
-            allGenres.add(tag);
+        for (let t in genre_avgs[uid]) {
+            allGenres.add(t);
         }
     }
+    genreList = Array.from(allGenres);
 
-    const genreList = Array.from(allGenres);
+    // Scroll width
+    const wrapper = document.getElementById("genreChartWrapper");
+    wrapper.style.minWidth = (genreList.length * 70) + "px";
 
+    // Compute avg rating per genre
+    avgPerGenre = genreList.map(tag => {
+        let vals = [];
+        users.forEach(u => {
+            const v = genre_avgs[u.id]?.[tag];
+            if (v !== undefined) vals.push(v);
+        });
+        return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+    });
+
+    // Sorting
+    function sortGenres(sortMode) {
+        const combined = genreList.map((tag, i) => ({ tag, avg: avgPerGenre[i] }));
+        if (sortMode === "avg_desc") combined.sort((a, b) => b.avg - a.avg);
+        else if (sortMode === "avg_asc") combined.sort((a, b) => a.avg - b.avg);
+        else combined.sort((a, b) => a.tag.localeCompare(b.tag));
+
+        genreList = combined.map(c => c.tag);
+        avgPerGenre = combined.map(c => c.avg);
+    }
+
+    sortGenres(document.getElementById("genreSort").value);
+
+    // Build datasets
     const genreData = {
         labels: genreList,
-        datasets: users.map((u, idx) => ({
-            label: u.display_name,
-            data: genreList.map(tag => genre_avgs[u.id]?.[tag] || 0),
-            borderWidth: 2,
-            fill: false
-        }))
+        datasets: [
+            ...users.map(u => ({
+                label: u.display_name,
+                data: genreList.map(tag => genre_avgs[u.id]?.[tag] || 0),
+                borderWidth: 2,
+                borderColor: userColor(u.id),
+                pointBackgroundColor: userColor(u.id),
+                fill: false
+            })),
+            {
+                label: 'Average (All Users)',
+                data: avgPerGenre,
+                borderWidth: 3,
+                borderColor: '#ffffff',
+                pointBackgroundColor: '#ffffff',
+                tension: 0.3
+            }
+        ]
     };
 
+    // Render chart
     new Chart(document.getElementById("genreChart"), {
         type: 'line',
         data: genreData,
         options: {
             responsive: true,
-            plugins: { legend: { position: 'bottom' } },
-            scales: { y: { beginAtZero: true, max: 10 } }
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' }},
+            scales: {
+                x: {
+                    ticks: {
+                        maxRotation: 35,
+                        minRotation: 35,
+                        autoSkip: false,
+                        font: { size: 12 },
+                        padding: 10
+                    }
+                },
+                y: { beginAtZero: true, max: 10 }
+            }
         }
     });
+
+    // Refresh on sort change
+    document.getElementById("genreSort").addEventListener("change", () => {
+        location.reload();
+    });
+
 </script>
 
 {% endblock %}

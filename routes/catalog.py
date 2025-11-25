@@ -619,3 +619,137 @@ def stats():
         rating_labels=rating_labels,
         rating_counts=rating_data
     )
+@catalog_bp.route("/user/<int:user_id>/stats")
+@login_required
+def user_stats(user_id):
+    db = get_db()
+
+    # load the selected user
+    user = db.execute("""
+        SELECT id, steamid, display_name
+        FROM users
+        WHERE id = ?
+    """, (user_id,)).fetchone()
+
+    if not user:
+        return "User not found", 404
+
+    steamid = user["steamid"]
+
+    # TOTAL HOURS
+    total_hours_row = db.execute("""
+        SELECT IFNULL(SUM(hours), 0) AS total
+        FROM player_hours
+        WHERE steamid=?
+    """, (steamid,)).fetchone()
+    total_hours = float(total_hours_row["total"])
+
+    # AVERAGE RATING
+    rating_rows = db.execute("""
+        SELECT rating FROM user_game_list 
+        WHERE user_id = ? AND rating IS NOT NULL
+    """, (user_id,)).fetchall()
+
+    ratings = [r["rating"] for r in rating_rows]
+    avg_rating = sum(ratings)/len(ratings) if ratings else None
+
+    # TAG COUNTS
+    tag_count = {}
+    rows = db.execute("""
+        SELECT g.tags
+        FROM games g
+        JOIN owned_games og ON og.appid = g.appid
+        WHERE og.steamid = ?
+    """, (steamid,)).fetchall()
+
+    for row in rows:
+        if row["tags"]:
+            for tag in [t.strip() for t in row["tags"].split(",") if t.strip()]:
+                if tag not in EXCLUDED_TAGS:
+                    tag_count[tag] = tag_count.get(tag, 0) + 1
+
+    sorted_tags = sorted(tag_count.items(), key=lambda x: x[1], reverse=True)
+    top_tags = sorted_tags[:10]
+
+    tag_labels = [g for g, _ in top_tags]
+    tag_data = [c for _, c in top_tags]
+
+    # HOURS BY TAG
+    hours_by_tag = {}
+    rows = db.execute("""
+        SELECT g.tags, ph.hours
+        FROM games g
+        JOIN player_hours ph ON g.appid = ph.appid
+        WHERE ph.steamid = ?
+    """, (steamid,)).fetchall()
+
+    for row in rows:
+        if row["tags"]:
+            tags = [t.strip() for t in row["tags"].split(",") if t.strip()]
+            hours_value = float(row["hours"] or 0)
+            for tag in tags:
+                if tag not in EXCLUDED_TAGS:
+                    hours_by_tag[tag] = hours_by_tag.get(tag, 0.0) + hours_value
+
+    sorted_hours = sorted(hours_by_tag.items(), key=lambda x: x[1], reverse=True)
+    top_hours = sorted_hours[:10]
+
+    hours_tag_labels = [g for g, _ in top_hours]
+    hours_tag_data = [h for _, h in top_hours]
+
+    # ===============================
+    # GAMES PER RELEASE YEAR (FIXED!)
+    # ===============================
+    year_counts = {}
+    rows = db.execute("""
+        SELECT release_year
+        FROM games g
+        JOIN owned_games og ON og.appid = g.appid
+        WHERE og.steamid = ?
+    """, (steamid,)).fetchall()
+
+    for row in rows:
+        year = row["release_year"]
+        if year and str(year).isdigit():
+            year = int(year)
+            year_counts[year] = year_counts.get(year, 0) + 1
+
+    year_labels = sorted(year_counts.keys())
+    year_data = [year_counts[y] for y in year_labels]
+
+    # RATING DISTRIBUTION
+    rating_count = {}
+    rows = db.execute("""
+        SELECT rating
+        FROM user_game_list
+        WHERE user_id = ? AND rating IS NOT NULL
+    """, (user_id,)).fetchall()
+
+    for row in rows:
+        r = int(row["rating"])
+        rating_count[r] = rating_count.get(r, 0) + 1
+
+    rating_labels = sorted(rating_count.keys())
+    rating_data = [rating_count[r] for r in rating_labels]
+
+    return render_template(
+        "stats.html",
+        total_hours=total_hours,
+        avg_rating=avg_rating,
+        rated_count=len(ratings),
+
+        tag_labels=tag_labels,
+        tag_data=tag_data,
+
+        hours_tag_labels=hours_tag_labels,
+        hours_tag_data=hours_tag_data,
+
+        # ⭐ FIXED — now populated
+        year_labels=year_labels,
+        year_counts=year_data,
+
+        rating_labels=rating_labels,
+        rating_counts=rating_data,
+
+        viewing_user_name=user["display_name"]
+    )
