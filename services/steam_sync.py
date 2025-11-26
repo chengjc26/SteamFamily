@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from models.db import get_db
 from services.steam_api import get_profile, get_owned_games
 from services.steam_store import (
@@ -37,61 +37,76 @@ def sync_user(steamid):
     print(f"[SYNC] Syncing user {steamid}...")
 
     # -------------------------
-    # Update profile
+    # 1. Update profile
     # -------------------------
     profile = get_profile(steamid)
     if profile:
-        db.execute("""
+        db.execute(
+            """
             UPDATE users
-            SET display_name=%s, avatar_url=%s
-            WHERE steamid=%s
-        """, (profile["personaname"], profile["avatarfull"], steamid))
+            SET display_name = %s, avatar_url = %s
+            WHERE steamid = %s
+            """,
+            (profile["personaname"], profile["avatarfull"], steamid)
+        )
 
     # -------------------------
-    # Insert Non-Steam Games only once
+    # 2. Insert Non-Steam Games (once)
     # -------------------------
     for appid, title in NON_STEAM_GAMES.items():
-        db.execute("""
+        db.execute(
+            """
             INSERT INTO owned_games (steamid, appid)
             VALUES (%s, %s)
             ON CONFLICT DO NOTHING
-        """, (steamid, appid))
+            """,
+            (steamid, appid),
+        )
 
-        db.execute("""
+        db.execute(
+            """
             INSERT INTO games (appid, title)
             VALUES (%s, %s)
             ON CONFLICT DO NOTHING
-        """, (appid, title))
+            """,
+            (appid, title),
+        )
 
     db.commit()
 
     # -------------------------
-    # Get steam library
+    # 3. Get Steam library
     # -------------------------
     owned = get_owned_games(steamid)
     fresh_appids = {g["appid"] for g in owned}
 
-    existing_rows = db.execute(
+    cur = db.execute(
         "SELECT appid FROM owned_games WHERE steamid=%s",
         (steamid,)
-    ).fetchall()
-    existing_appids = {r["appid"] for r in existing_rows}
+    )
+    existing_rows = cur.fetchall() or []
+    existing_appids = {row["appid"] for row in existing_rows}
 
-    # Games added in Steam
-    new_appids = fresh_appids - existing_appids
-
-    # Games removed from Steam (ignore non-steam)
+    # -------------------------
+    # 4. Removed Steam games
+    # -------------------------
     removed_appids = {
         appid for appid in (existing_appids - fresh_appids)
         if appid not in NON_STEAM_GAMES
     }
 
     for appid in removed_appids:
-        db.execute("DELETE FROM owned_games WHERE steamid=%s AND appid=%s", (steamid, appid))
-        db.execute("DELETE FROM player_hours WHERE steamid=%s AND appid=%s", (steamid, appid))
+        db.execute(
+            "DELETE FROM owned_games WHERE steamid=%s AND appid=%s",
+            (steamid, appid)
+        )
+        db.execute(
+            "DELETE FROM player_hours WHERE steamid=%s AND appid=%s",
+            (steamid, appid)
+        )
 
     # -------------------------
-    # Sync Steam games
+    # 5. Sync Steam games + hours + metadata
     # -------------------------
     for game in owned:
         appid = game["appid"]
@@ -100,44 +115,56 @@ def sync_user(steamid):
             continue
 
         hours = game.get("playtime_forever", 0) / 60
+        timestamp = datetime.now(timezone.utc).isoformat()
 
-        # Add to owned list
-        db.execute("""
+        # Insert ownership
+        db.execute(
+            """
             INSERT INTO owned_games (steamid, appid)
             VALUES (%s, %s)
             ON CONFLICT DO NOTHING
-        """, (steamid, appid))
+            """,
+            (steamid, appid)
+        )
 
-        # Update or insert hours
-        exists = db.execute("""
+        # Check if hours exist
+        cur = db.execute(
+            """
             SELECT id FROM player_hours
             WHERE steamid=%s AND appid=%s
-        """, (steamid, appid)).fetchone()
+            """,
+            (steamid, appid)
+        )
+        exists = cur.fetchone()
 
         if exists:
-            db.execute("""
+            db.execute(
+                """
                 UPDATE player_hours
                 SET hours=%s, last_updated=%s
                 WHERE steamid=%s AND appid=%s
-            """, (hours, datetime.utcnow().isoformat(), steamid, appid))
+                """,
+                (hours, timestamp, steamid, appid)
+            )
         else:
-            db.execute("""
+            db.execute(
+                """
                 INSERT INTO player_hours (steamid, appid, hours, last_updated)
                 VALUES (%s, %s, %s, %s)
-            """, (steamid, appid, hours, datetime.utcnow().isoformat()))
+                """,
+                (steamid, appid, hours, timestamp)
+            )
 
-        # -------------------------
-        # Metadata fetch → only if game DOES NOT EXIST in DB
-        # -------------------------
-        row_meta = db.execute("""
-            SELECT appid FROM games WHERE appid=%s
-        """, (appid,)).fetchone()
+        # Metadata check
+        cur = db.execute(
+            "SELECT appid FROM games WHERE appid=%s",
+            (appid,)
+        )
+        row_meta = cur.fetchone()
 
-        # If metadata already exists, skip completely
         if row_meta:
             continue
 
-        # Metadata needed for brand new entries only
         print(f"[META] Fetching metadata for {appid}...")
 
         meta = get_store_info(appid)
@@ -156,19 +183,22 @@ def sync_user(steamid):
             fallback
         )
 
-        db.execute("""
+        db.execute(
+            """
             INSERT INTO games (appid, title, cover_url, description, genres, release_year, tags)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (appid) DO NOTHING
-        """, (
-            appid,
-            meta.get("title") if meta else None,
-            best_cover,
-            meta.get("description") if meta else None,
-            meta.get("genres") if meta else None,
-            meta.get("release_year") if meta else None,
-            tag_string
-        ))
+            """,
+            (
+                appid,
+                meta.get("title") if meta else None,
+                best_cover,
+                meta.get("description") if meta else None,
+                meta.get("genres") if meta else None,
+                meta.get("release_year") if meta else None,
+                tag_string,
+            )
+        )
 
     db.commit()
     print("[SYNC] Done!")
