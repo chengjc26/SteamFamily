@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-3xl font-bold mb-6">Admin Dashboard</h1>
+
+<a href="{{ url_for('catalog.add_game') }}" class="bg-green-600 px-4 py-2 rounded hover:bg-green-700 mb-4 inline-block">
+    Add New Game
+</a>
+
+<table class="w-full text-left border-collapse">
+    <thead>
+        <tr class="border-b border-gray-700">
+            <th class="p-2">Title</th>
+            <th class="p-2">Cover</th>
+            <th class="p-2">Custom Cover</th>
+            <th class="p-2">Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for game in games %}
+        <tr class="border-b border-gray-700">
+            <td class="p-2">{{ game.title }}</td>
+            <td class="p-2">
+                {% if game.cover_url %}
+                <img src="{{ game.cover_url }}" alt="{{ game.title }}" class="w-16 h-auto">
+                {% endif %}
+            </td>
+            <td class="p-2">
+                {% if game.custom_cover_url %}
+                <img src="{{ game.custom_cover_url }}" alt="{{ game.title }}" class="w-16 h-auto">
+                {% endif %}
+            </td>
+            <td class="p-2">
+                <a href="{{ url_for('catalog.edit_game', appid=game.appid) }}" class="bg-blue-600 px-3 py-1 rounded hover:bg-blue-700">
+                    Edit Metadata
+                </a>
+
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

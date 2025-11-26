@@ -1,12 +1,23 @@
-from flask import Blueprint, render_template, request, redirect, url_for
+from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import current_user, login_required
 from models.db import get_db
+from functools import wraps
+import os
 
 EXCLUDED_TAGS = {
     "Singleplayer", "Multiplayer", "Free to Play"
 }
 
 catalog_bp = Blueprint("catalog", __name__, url_prefix="/")
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not getattr(current_user, "is_admin", False):
+            flash("You do not have permission to access this page.", "error")
+            return redirect(url_for("catalog.games"))
+        return f(*args, **kwargs)
+    return decorated_function
 
 # ============================================================
 #                     GAME LIST
@@ -487,7 +498,7 @@ def stats():
     # TOTAL HOURS
     # -------------------------------
     total_hours_row = db.execute("""
-        SELECT IFNULL(SUM(hours), 0) AS total
+        SELECT COALESCE(SUM(hours), 0) AS total
         FROM player_hours
         WHERE steamid=?
     """, (steamid,)).fetchone()
@@ -638,7 +649,7 @@ def user_stats(user_id):
 
     # TOTAL HOURS
     total_hours_row = db.execute("""
-        SELECT IFNULL(SUM(hours), 0) AS total
+        SELECT COALESCE(SUM(hours), 0) AS total
         FROM player_hours
         WHERE steamid=?
     """, (steamid,)).fetchone()
@@ -753,3 +764,94 @@ def user_stats(user_id):
 
         viewing_user_name=user["display_name"]
     )
+# Admin dashboard listing all games
+@catalog_bp.route("/admin")
+@login_required
+@admin_required
+def admin_dashboard():
+    db = get_db()
+    games = db.execute("""
+        SELECT appid, title, cover_url, custom_cover_url
+        FROM games
+        ORDER BY title COLLATE NOCASE
+    """).fetchall()
+    
+    return render_template("admin_dashboard.html", games=games)
+
+# Admin: add new game
+@catalog_bp.route("/admin/add_game", methods=["GET", "POST"])
+@login_required
+@admin_required
+def add_game():
+    db = get_db()
+    
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        description = request.form.get("description", "").strip()
+        release_year = request.form.get("release_year")
+        tags = request.form.get("tags", "").strip()
+        cover_url = request.form.get("cover_url", "").strip()
+        
+        try:
+            release_year = int(release_year) if release_year else None
+        except ValueError:
+            release_year = None
+
+        # Insert new game
+        cur = db.cursor()
+        cur.execute("""
+            INSERT INTO games (title, description, release_year, tags, cover_url)
+            VALUES (?, ?, ?, ?, ?)
+        """, (title, description, release_year, tags, cover_url))
+        new_appid = cur.lastrowid  # get the new game's appid
+
+        # Automatically add to admin's owned_games so it appears in library/family
+        cur.execute("""
+            INSERT INTO owned_games (steamid, appid)
+            VALUES (?, ?)
+        """, (current_user.steamid, new_appid))
+
+        db.commit()
+        cur.close()
+        
+        flash(f"Game '{title}' added successfully and added to your library.", "success")
+        return redirect(url_for("catalog.admin_dashboard"))
+    
+    return render_template("admin_add_game.html")
+
+# Admin: Edit existing game
+@catalog_bp.route("/admin/edit_game/<int:appid>", methods=["GET", "POST"])
+@login_required
+@admin_required
+def edit_game(appid):
+    db = get_db()
+
+    # Fetch existing game
+    game = db.execute("SELECT * FROM games WHERE appid=?", (appid,)).fetchone()
+    if not game:
+        flash("Game not found.", "error")
+        return redirect(url_for("catalog.admin_dashboard"))
+
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        description = request.form.get("description", "").strip()
+        release_year = request.form.get("release_year")
+        tags = request.form.get("tags", "").strip()
+        cover_url = request.form.get("cover_url", "").strip()
+
+        try:
+            release_year = int(release_year) if release_year else None
+        except ValueError:
+            release_year = None
+
+        db.execute("""
+            UPDATE games
+            SET title=?, description=?, release_year=?, tags=?, cover_url=?
+            WHERE appid=?
+        """, (title, description, release_year, tags, cover_url, appid))
+        db.commit()
+
+        flash(f"Game '{title}' updated successfully.", "success")
+        return redirect(url_for("catalog.admin_dashboard"))
+
+    return render_template("admin_edit_game.html", game=game)

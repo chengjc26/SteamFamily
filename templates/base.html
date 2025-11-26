@@ -28,6 +28,9 @@
         <a href="/family" class="hover:text-blue-400">Family</a>
         <a href="{{ url_for('catalog.family_stats') }}" class="hover:text-blue-400">Family Stats</a>
         <a href="/stats" class="hover:text-blue-400">Stats</a>
+        {% if current_user.is_admin %}
+            <a href="{{ url_for('catalog.admin_dashboard') }}" class="hover:text-yellow-400 font-bold">Admin</a>
+        {% endif %}
 
         <!-- IMPORTANT: Added onclick to show popup -->
         <a href="/profile/sync" class="hover:text-blue-400" onclick="showSyncPopup()">Sync</a>

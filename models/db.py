@@ -1,44 +1,40 @@
-import sqlite3
 import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from flask import g
 
-DB_PATH = os.path.join("instance", "steamcatalog.db")
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
 
 print("=== DB DEBUG ===")
-print("DB PATH:", DB_PATH)
-print("ABS PATH:", os.path.abspath(DB_PATH))
-print("DB EXISTS:", os.path.exists(DB_PATH))
-try:
-    print("INSTANCE CONTENTS:", os.listdir("instance"))
-except Exception as e:
-    print("INSTANCE ERROR:", e)
-print("===============")
+print("DATABASE_URL:", DATABASE_URL)
+print("==============")
 
 
+# Postgres version of get_db
 def get_db():
     if 'db' not in g:
-        g.db = sqlite3.connect(
-        DB_PATH,
-        timeout=15,
-        check_same_thread=False
-    )
-
-        g.db.row_factory = sqlite3.Row
+        g.db = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
     return g.db
+
 
 def close_db(e=None):
     db = g.pop('db', None)
     if db is not None:
         db.close()
 
+
+# Initialization for Postgres tables
 def init_db():
-    os.makedirs("instance", exist_ok=True)
-    db = sqlite3.connect(DB_PATH)
+    db = get_db()
+    cur = db.cursor()
+
 
     # Users
-    db.execute("""
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         username TEXT UNIQUE,
         password_hash TEXT,
         steamid TEXT UNIQUE,
@@ -47,8 +43,9 @@ def init_db():
     );
     """)
 
+
     # Games metadata
-    db.execute("""
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS games (
         appid INTEGER PRIMARY KEY,
         title TEXT,
@@ -62,19 +59,20 @@ def init_db():
     """)
 
 
-    # NEW: Owned games table
-    db.execute("""
+    # Owned games
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS owned_games (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         steamid TEXT,
         appid INTEGER
     );
     """)
 
+
     # Playtime table
-    db.execute("""
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS player_hours (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         steamid TEXT,
         appid INTEGER,
         hours REAL,
@@ -82,10 +80,11 @@ def init_db():
     );
     """)
 
+
     # User ratings + notes
-    db.execute("""
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS user_game_list (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         user_id INTEGER,
         appid INTEGER,
         rating INTEGER,
@@ -95,5 +94,11 @@ def init_db():
     );
     """)
 
+
     db.commit()
-    db.close()
+    cur.close()
+
+
+
+
+

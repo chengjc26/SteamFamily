@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="text-3xl font-bold mb-6 text-blue-300">Edit Game</h1>
+
+<form method="POST" class="space-y-4">
+    <!-- Title -->
+    <div>
+        <label for="title" class="block mb-1">Title</label>
+        <input type="text" id="title" name="title" value="{{ game.title }}" required class="w-full p-2 text-black">
+    </div>
+
+    <!-- Description -->
+    <div>
+        <label for="description" class="block mb-1">Description</label>
+        <textarea id="description" name="description" rows="4" class="w-full p-2 text-black">{{ game.description }}</textarea>
+    </div>
+
+    <!-- Release Year -->
+    <div>
+        <label for="release_year" class="block mb-1">Release Year</label>
+        <input type="number" id="release_year" name="release_year" value="{{ game.release_year }}" class="w-full p-2 text-black">
+    </div>
+
+    <!-- Tags -->
+    <div>
+        <label for="tags" class="block mb-1">Tags (comma-separated)</label>
+        <input type="text" id="tags" name="tags" value="{{ game.tags }}" class="w-full p-2 text-black">
+    </div>
+
+    <!-- Cover URL -->
+    <div>
+        <label for="cover_url" class="block mb-1">Cover URL</label>
+        <input type="text" id="cover_url" name="cover_url" value="{{ game.cover_url }}" class="w-full p-2 text-black">
+    </div>
+
+    <button type="submit" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-white">
+        Update Game
+    </button>
+</form>
+{% endblock %}

@@ -13,6 +13,7 @@ class User(UserMixin):
         self.steamid = row["steamid"]
         self.display_name = row["display_name"]
         self.avatar_url = row["avatar_url"]
+        self.is_admin = bool(row["is_admin"])
 
     @staticmethod
     def create(username, password, steamid):
