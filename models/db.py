@@ -1,21 +1,18 @@
 import os
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import psycopg
 from flask import g
 
-
 DATABASE_URL = os.environ.get("DATABASE_URL")
-
 
 print("=== DB DEBUG ===")
 print("DATABASE_URL:", DATABASE_URL)
 print("==============")
 
-
-# Postgres version of get_db
+# psycopg3 version of get_db
 def get_db():
     if 'db' not in g:
-        g.db = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+        # Make connection return rows as dict-like objects
+        g.db = psycopg.connect(DATABASE_URL, row_factory=psycopg.rows.dict_row)
     return g.db
 
 
@@ -24,12 +21,10 @@ def close_db(e=None):
     if db is not None:
         db.close()
 
-
 # Initialization for Postgres tables
 def init_db():
     db = get_db()
     cur = db.cursor()
-
 
     # Users
     cur.execute("""
@@ -39,10 +34,10 @@ def init_db():
         password_hash TEXT,
         steamid TEXT UNIQUE,
         display_name TEXT,
-        avatar_url TEXT
+        avatar_url TEXT,
+        is_admin BOOLEAN DEFAULT FALSE
     );
     """)
-
 
     # Games metadata
     cur.execute("""
@@ -58,7 +53,6 @@ def init_db():
     );
     """)
 
-
     # Owned games
     cur.execute("""
     CREATE TABLE IF NOT EXISTS owned_games (
@@ -67,7 +61,6 @@ def init_db():
         appid INTEGER
     );
     """)
-
 
     # Playtime table
     cur.execute("""
@@ -79,7 +72,6 @@ def init_db():
         last_updated TEXT
     );
     """)
-
 
     # User ratings + notes
     cur.execute("""
@@ -94,11 +86,5 @@ def init_db():
     );
     """)
 
-
     db.commit()
     cur.close()
-
-
-
-
-
