@@ -721,14 +721,22 @@ def add_game():
         except ValueError:
             release_year = None
 
-        # FIXED: PostgreSQL INSERT must use RETURNING to fetch new id
+        appid = request.form.get("appid", "").strip()
+
+        if not appid.isdigit():
+            flash("AppID must be a number.", "error")
+            return redirect(url_for("catalog.add_game"))
+
+        appid = int(appid)
+
         row = db.execute("""
-            INSERT INTO games (title, description, release_year, tags, cover_url)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO games (appid, title, description, release_year, tags, cover_url)
+            VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING appid
-        """, (title, description, release_year, tags, cover_url)).fetchone()
+        """, (appid, title, description, release_year, tags, cover_url)).fetchone()
 
         new_appid = row["appid"]
+
 
         # FIXED: Now insert correct appid instead of None
         db.execute("""
