@@ -1,13 +1,6 @@
 from datetime import datetime, timezone
 from models.db import get_db
 from services.steam_api import get_profile, get_owned_games
-from services.steam_store import (
-    get_store_info,
-    get_steamspy_tags,
-    get_sgdb_vertical_cover,
-    get_sgdb_poster,
-    get_steam_vertical_cover
-)
 
 NON_STEAM_GAMES = {
     900001: "Honkai: Star Rail",
@@ -37,7 +30,7 @@ def sync_user(steamid):
     print(f"[SYNC] Syncing user {steamid}...")
 
     # -------------------------
-    # 1. Update profile
+    # 1. Update profile (fast)
     # -------------------------
     profile = get_profile(steamid)
     if profile:
@@ -51,7 +44,7 @@ def sync_user(steamid):
         )
 
     # -------------------------
-    # 2. Insert Non-Steam Games (once)
+    # 2. Insert Non-Steam Games (fast)
     # -------------------------
     for appid, title in NON_STEAM_GAMES.items():
         db.execute(
@@ -60,22 +53,23 @@ def sync_user(steamid):
             VALUES (%s, %s)
             ON CONFLICT DO NOTHING
             """,
-            (steamid, appid),
+            (steamid, appid)
         )
 
+        # Insert minimal metadata (appid + title)
         db.execute(
             """
             INSERT INTO games (appid, title)
             VALUES (%s, %s)
             ON CONFLICT DO NOTHING
             """,
-            (appid, title),
+            (appid, title)
         )
 
     db.commit()
 
     # -------------------------
-    # 3. Get Steam library
+    # 3. Get steam library (fast)
     # -------------------------
     owned = get_owned_games(steamid)
     fresh_appids = {g["appid"] for g in owned}
@@ -87,9 +81,7 @@ def sync_user(steamid):
     existing_rows = cur.fetchall() or []
     existing_appids = {row["appid"] for row in existing_rows}
 
-    # -------------------------
-    # 4. Removed Steam games
-    # -------------------------
+    # Games removed from Steam (ignore non-steam)
     removed_appids = {
         appid for appid in (existing_appids - fresh_appids)
         if appid not in NON_STEAM_GAMES
@@ -106,7 +98,7 @@ def sync_user(steamid):
         )
 
     # -------------------------
-    # 5. Sync Steam games + hours + metadata
+    # 4. Sync hours + add new games (SUPER FAST)
     # -------------------------
     for game in owned:
         appid = game["appid"]
@@ -117,7 +109,7 @@ def sync_user(steamid):
         hours = game.get("playtime_forever", 0) / 60
         timestamp = datetime.now(timezone.utc).isoformat()
 
-        # Insert ownership
+        # Add ownership
         db.execute(
             """
             INSERT INTO owned_games (steamid, appid)
@@ -127,7 +119,24 @@ def sync_user(steamid):
             (steamid, appid)
         )
 
-        # Check if hours exist
+        # Ensure game entry exists minimally (appid + title)
+        cur = db.execute(
+            "SELECT appid FROM games WHERE appid=%s",
+            (appid,)
+        )
+        exists_meta = cur.fetchone()
+
+        if not exists_meta:
+            db.execute(
+                """
+                INSERT INTO games (appid, title)
+                VALUES (%s, %s)
+                ON CONFLICT DO NOTHING
+                """,
+                (appid, game.get("name", None))
+            )
+
+        # Check if hours already exist
         cur = db.execute(
             """
             SELECT id FROM player_hours
@@ -135,9 +144,9 @@ def sync_user(steamid):
             """,
             (steamid, appid)
         )
-        exists = cur.fetchone()
+        exists_hours = cur.fetchone()
 
-        if exists:
+        if exists_hours:
             db.execute(
                 """
                 UPDATE player_hours
@@ -155,50 +164,5 @@ def sync_user(steamid):
                 (steamid, appid, hours, timestamp)
             )
 
-        # Metadata check
-        cur = db.execute(
-            "SELECT appid FROM games WHERE appid=%s",
-            (appid,)
-        )
-        row_meta = cur.fetchone()
-
-        if row_meta:
-            continue
-
-        print(f"[META] Fetching metadata for {appid}...")
-
-        meta = get_store_info(appid)
-        tags = get_steamspy_tags(appid)
-        tag_string = ",".join(tags) if tags else None
-
-        cover_sgdb_portrait = get_sgdb_vertical_cover(appid)
-        cover_sgdb_poster = get_sgdb_poster(appid)
-        cover_steam_vertical = get_steam_vertical_cover(appid)
-        fallback = meta.get("fallback_cover") if meta else None
-
-        best_cover = (
-            cover_sgdb_portrait or
-            cover_sgdb_poster or
-            cover_steam_vertical or
-            fallback
-        )
-
-        db.execute(
-            """
-            INSERT INTO games (appid, title, cover_url, description, genres, release_year, tags)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (appid) DO NOTHING
-            """,
-            (
-                appid,
-                meta.get("title") if meta else None,
-                best_cover,
-                meta.get("description") if meta else None,
-                meta.get("genres") if meta else None,
-                meta.get("release_year") if meta else None,
-                tag_string,
-            )
-        )
-
     db.commit()
-    print("[SYNC] Done!")
+    print("[SYNC] ✔ Potato mode finished!")
