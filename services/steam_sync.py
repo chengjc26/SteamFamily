@@ -48,7 +48,7 @@ def sync_user(steamid):
         """, (profile["personaname"], profile["avatarfull"], steamid))
 
     # -------------------------
-    # Insert Non-Steam Games (Postgres-safe)
+    # Insert Non-Steam Games only once
     # -------------------------
     for appid, title in NON_STEAM_GAMES.items():
         db.execute("""
@@ -66,7 +66,7 @@ def sync_user(steamid):
     db.commit()
 
     # -------------------------
-    # Steam owned games
+    # Get steam library
     # -------------------------
     owned = get_owned_games(steamid)
     fresh_appids = {g["appid"] for g in owned}
@@ -77,11 +77,10 @@ def sync_user(steamid):
     ).fetchall()
     existing_appids = {r["appid"] for r in existing_rows}
 
+    # Games added in Steam
     new_appids = fresh_appids - existing_appids
 
-    # -------------------------
-    # Removed games (ignore non-steam)
-    # -------------------------
+    # Games removed from Steam (ignore non-steam)
     removed_appids = {
         appid for appid in (existing_appids - fresh_appids)
         if appid not in NON_STEAM_GAMES
@@ -92,7 +91,7 @@ def sync_user(steamid):
         db.execute("DELETE FROM player_hours WHERE steamid=%s AND appid=%s", (steamid, appid))
 
     # -------------------------
-    # Sync each Steam game
+    # Sync Steam games
     # -------------------------
     for game in owned:
         appid = game["appid"]
@@ -102,14 +101,14 @@ def sync_user(steamid):
 
         hours = game.get("playtime_forever", 0) / 60
 
-        # Add owned game
+        # Add to owned list
         db.execute("""
             INSERT INTO owned_games (steamid, appid)
             VALUES (%s, %s)
             ON CONFLICT DO NOTHING
         """, (steamid, appid))
 
-        # Playtime
+        # Update or insert hours
         exists = db.execute("""
             SELECT id FROM player_hours
             WHERE steamid=%s AND appid=%s
@@ -127,20 +126,18 @@ def sync_user(steamid):
                 VALUES (%s, %s, %s, %s)
             """, (steamid, appid, hours, datetime.utcnow().isoformat()))
 
-        # Metadata check
+        # -------------------------
+        # Metadata fetch → only if game DOES NOT EXIST in DB
+        # -------------------------
         row_meta = db.execute("""
-            SELECT title, tags, cover_url, description
-            FROM games
-            WHERE appid=%s
+            SELECT appid FROM games WHERE appid=%s
         """, (appid,)).fetchone()
 
-        if row_meta and (
-            row_meta["cover_url"] or
-            row_meta["tags"] or
-            row_meta["description"]
-        ):
+        # If metadata already exists, skip completely
+        if row_meta:
             continue
 
+        # Metadata needed for brand new entries only
         print(f"[META] Fetching metadata for {appid}...")
 
         meta = get_store_info(appid)
@@ -160,23 +157,17 @@ def sync_user(steamid):
         )
 
         db.execute("""
-            UPDATE games
-            SET
-                title        = COALESCE(%s, title),
-                cover_url    = COALESCE(%s, cover_url),
-                description  = COALESCE(%s, description),
-                genres       = COALESCE(%s, genres),
-                release_year = COALESCE(%s, release_year),
-                tags         = COALESCE(%s, tags)
-            WHERE appid=%s
+            INSERT INTO games (appid, title, cover_url, description, genres, release_year, tags)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (appid) DO NOTHING
         """, (
+            appid,
             meta.get("title") if meta else None,
             best_cover,
             meta.get("description") if meta else None,
             meta.get("genres") if meta else None,
             meta.get("release_year") if meta else None,
-            tag_string,
-            appid
+            tag_string
         ))
 
     db.commit()
