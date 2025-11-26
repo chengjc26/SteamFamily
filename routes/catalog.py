@@ -307,10 +307,11 @@ def family():
 def family_stats():
     db = get_db()
 
+    # ---- FIXED: removed COLLATE NOCASE, use LOWER() instead ----
     raw_users = db.execute("""
         SELECT id, display_name
         FROM users
-        ORDER BY display_name COLLATE NOCASE
+        ORDER BY LOWER(display_name)
     """).fetchall()
 
     users = [{"id": u["id"], "display_name": u["display_name"]} for u in raw_users]
@@ -377,7 +378,6 @@ def family_stats():
         for uid in similarity
     }
 
-    from collections import defaultdict
     genre_totals = defaultdict(lambda: defaultdict(list))
 
     for r in ratings:
@@ -408,7 +408,6 @@ def family_stats():
         JOIN games g ON g.appid = ph.appid
     """).fetchall()
 
-    from collections import defaultdict
     hours_map = defaultdict(list)
 
     for row in raw_hours:
@@ -420,7 +419,9 @@ def family_stats():
     most_played = {}
     for user in raw_users:
         uid = user["id"]
-        steamid = db.execute("SELECT steamid FROM users WHERE id=%s", (uid,)).fetchone()["steamid"]
+
+        steamid_row = db.execute("SELECT steamid FROM users WHERE id=%s", (uid,)).fetchone()
+        steamid = steamid_row["steamid"]
 
         entries = hours_map.get(steamid, [])
         if entries:
@@ -436,6 +437,7 @@ def family_stats():
         genre_avgs=genre_out,
         most_played=most_played
     )
+
 
 
 # ============================================================
@@ -687,12 +689,14 @@ def user_stats(user_id):
 @admin_required
 def admin_dashboard():
     db = get_db()
+
+    # FIXED: Removed COLLATE NOCASE (SQLite only), use LOWER(title)
     games = db.execute("""
         SELECT appid, title, cover_url, custom_cover_url
         FROM games
-        ORDER BY title COLLATE NOCASE
+        ORDER BY LOWER(title)
     """).fetchall()
-    
+
     return render_template("admin_dashboard.html", games=games)
 
 
@@ -704,38 +708,39 @@ def admin_dashboard():
 @admin_required
 def add_game():
     db = get_db()
-    
+
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         description = request.form.get("description", "").strip()
         release_year = request.form.get("release_year")
         tags = request.form.get("tags", "").strip()
         cover_url = request.form.get("cover_url", "").strip()
-        
+
         try:
             release_year = int(release_year) if release_year else None
         except ValueError:
             release_year = None
 
-        cur = db.cursor()
-        cur.execute("""
+        # FIXED: PostgreSQL INSERT must use RETURNING to fetch new id
+        row = db.execute("""
             INSERT INTO games (title, description, release_year, tags, cover_url)
             VALUES (%s, %s, %s, %s, %s)
-        """, (title, description, release_year, tags, cover_url))
+            RETURNING appid
+        """, (title, description, release_year, tags, cover_url)).fetchone()
 
-        new_appid = cur.fetchone() if hasattr(cur, "lastrowid") else None
+        new_appid = row["appid"]
 
-        cur.execute("""
+        # FIXED: Now insert correct appid instead of None
+        db.execute("""
             INSERT INTO owned_games (steamid, appid)
             VALUES (%s, %s)
         """, (current_user.steamid, new_appid))
 
         db.commit()
-        cur.close()
-        
+
         flash(f"Game '{title}' added successfully and added to your library.", "success")
         return redirect(url_for("catalog.admin_dashboard"))
-    
+
     return render_template("admin_add_game.html")
 
 
@@ -748,7 +753,11 @@ def add_game():
 def edit_game(appid):
     db = get_db()
 
-    game = db.execute("SELECT * FROM games WHERE appid=%s", (appid,)).fetchone()
+    game = db.execute(
+        "SELECT * FROM games WHERE appid=%s",
+        (appid,)
+    ).fetchone()
+
     if not game:
         flash("Game not found.", "error")
         return redirect(url_for("catalog.admin_dashboard"))
@@ -770,9 +779,11 @@ def edit_game(appid):
             SET title=%s, description=%s, release_year=%s, tags=%s, cover_url=%s
             WHERE appid=%s
         """, (title, description, release_year, tags, cover_url, appid))
+
         db.commit()
 
         flash(f"Game '{title}' updated successfully.", "success")
         return redirect(url_for("catalog.admin_dashboard"))
 
     return render_template("admin_edit_game.html", game=game)
+
