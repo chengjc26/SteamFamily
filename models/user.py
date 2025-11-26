@@ -27,7 +27,7 @@ class User(UserMixin):
 
         db.execute("""
             INSERT INTO users (username, password_hash, steamid, display_name, avatar_url)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
         """, (
             username,
             pw_hash,
@@ -64,14 +64,20 @@ class User(UserMixin):
 
     @staticmethod
     def get_by_username(username):
-        row = get_db().execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+        row = get_db().execute(
+            "SELECT * FROM users WHERE username=%s",
+            (username,)
+        ).fetchone()
         if row:
             return User(row)
         return None
 
     @staticmethod
     def get_by_id(user_id):
-        row = get_db().execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        row = get_db().execute(
+            "SELECT * FROM users WHERE id=%s",
+            (user_id,)
+        ).fetchone()
         if row:
             return User(row)
         return None

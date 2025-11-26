@@ -14,22 +14,22 @@ def rate_game(appid):
     # Check if an entry already exists
     exists = db.execute("""
         SELECT id FROM user_game_list
-        WHERE user_id=? AND appid=?
+        WHERE user_id=%s AND appid=%s
     """, (current_user.id, appid)).fetchone()
 
     if exists:
         # Update existing row
         db.execute("""
             UPDATE user_game_list
-            SET rating=?, date_added=?
-            WHERE user_id=? AND appid=?
+            SET rating=%s, date_added=%s
+            WHERE user_id=%s AND appid=%s
         """, (rating, datetime.utcnow().isoformat(), current_user.id, appid))
 
     else:
         # Insert NEW row with all required fields
         db.execute("""
             INSERT INTO user_game_list (user_id, appid, rating, notes, play_order, date_added)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (
             current_user.id,
             appid,

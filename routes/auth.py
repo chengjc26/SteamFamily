@@ -56,7 +56,8 @@ def register():
         # -----------------------------
         db = get_db()
         existing = db.execute(
-            "SELECT 1 FROM users WHERE steamid = ?", (steamid,)
+            "SELECT 1 FROM users WHERE steamid = %s",
+            (steamid,)
         ).fetchone()
 
         if existing:

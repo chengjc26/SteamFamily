@@ -17,16 +17,16 @@ def profile():
 
     # Total hours
     hours_row = db.execute("""
-        SELECT IFNULL(SUM(hours), 0) AS total
+        SELECT COALESCE(SUM(hours), 0) AS total
         FROM player_hours
-        WHERE steamid = ?
+        WHERE steamid = %s
     """, (steamid,)).fetchone()
 
     total_hours = hours_row["total"]
 
     # Ratings
     rating_rows = db.execute("""
-        SELECT rating FROM user_game_list WHERE user_id = ?
+        SELECT rating FROM user_game_list WHERE user_id = %s
     """, (current_user.id,)).fetchall()
 
     ratings = [r["rating"] for r in rating_rows]
@@ -38,7 +38,7 @@ def profile():
         SELECT g.appid, g.title, g.cover_url, u.rating
         FROM user_game_list u
         JOIN games g ON g.appid = u.appid
-        WHERE u.user_id = ?
+        WHERE u.user_id = %s
         ORDER BY u.date_added DESC
         LIMIT 12
     """, (current_user.id,)).fetchall()
@@ -64,24 +64,24 @@ def edit_game(appid):
     notes = request.form.get("notes")
     play_order = request.form.get("play_order")
 
-    # If no date_added exists, add a timestamp
     existing = db.execute("""
         SELECT id FROM user_game_list
-        WHERE user_id = ? AND appid = ?
+        WHERE user_id = %s AND appid = %s
     """, (current_user.id, appid)).fetchone()
 
     if existing:
         # Update existing entry
         db.execute("""
             UPDATE user_game_list
-            SET rating=?, notes=?, play_order=?
-            WHERE user_id=? AND appid=?
+            SET rating=%s, notes=%s, play_order=%s
+            WHERE user_id=%s AND appid=%s
         """, (rating, notes, play_order, current_user.id, appid))
+
     else:
         # Insert new entry
         db.execute("""
             INSERT INTO user_game_list (user_id, appid, rating, notes, play_order, date_added)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (
             current_user.id, appid, rating, notes, play_order,
             datetime.utcnow().isoformat()
@@ -101,6 +101,4 @@ from flask import request
 def sync_user_route():
     sync_user(current_user.steamid)  # Sync ONLY this user
     flash("Steam sync completed.", "success")
-
-    # Redirect back to previous page, or fallback to profile
     return redirect(request.referrer or url_for("profile.profile"))

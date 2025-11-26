@@ -43,30 +43,36 @@ def sync_user(steamid):
     if profile:
         db.execute("""
             UPDATE users
-            SET display_name=?, avatar_url=?
-            WHERE steamid=?
+            SET display_name=%s, avatar_url=%s
+            WHERE steamid=%s
         """, (profile["personaname"], profile["avatarfull"], steamid))
 
     # -------------------------
-    # Insert Non-Steam Games FIRST (never touched again)
+    # Insert Non-Steam Games (Postgres-safe)
     # -------------------------
     for appid, title in NON_STEAM_GAMES.items():
-        db.execute("INSERT OR IGNORE INTO owned_games (steamid, appid) VALUES (?,?)",
-                   (steamid, appid))
-        db.execute("INSERT OR IGNORE INTO games (appid, title) VALUES (?,?)",
-                   (appid, title))
+        db.execute("""
+            INSERT INTO owned_games (steamid, appid)
+            VALUES (%s, %s)
+            ON CONFLICT DO NOTHING
+        """, (steamid, appid))
 
-    # 🔥 commit now
+        db.execute("""
+            INSERT INTO games (appid, title)
+            VALUES (%s, %s)
+            ON CONFLICT DO NOTHING
+        """, (appid, title))
+
     db.commit()
 
     # -------------------------
-    # Get Steam owned games
+    # Steam owned games
     # -------------------------
     owned = get_owned_games(steamid)
     fresh_appids = {g["appid"] for g in owned}
 
     existing_rows = db.execute(
-        "SELECT appid FROM owned_games WHERE steamid=?",
+        "SELECT appid FROM owned_games WHERE steamid=%s",
         (steamid,)
     ).fetchall()
     existing_appids = {r["appid"] for r in existing_rows}
@@ -74,20 +80,19 @@ def sync_user(steamid):
     new_appids = fresh_appids - existing_appids
 
     # -------------------------
-    # Removed games
+    # Removed games (ignore non-steam)
     # -------------------------
     removed_appids = {
         appid for appid in (existing_appids - fresh_appids)
         if appid not in NON_STEAM_GAMES
     }
 
-    # delete removed
     for appid in removed_appids:
-        db.execute("DELETE FROM owned_games WHERE steamid=? AND appid=?", (steamid, appid))
-        db.execute("DELETE FROM player_hours WHERE steamid=? AND appid=?", (steamid, appid))
+        db.execute("DELETE FROM owned_games WHERE steamid=%s AND appid=%s", (steamid, appid))
+        db.execute("DELETE FROM player_hours WHERE steamid=%s AND appid=%s", (steamid, appid))
 
     # -------------------------
-    # Sync Steam games
+    # Sync each Steam game
     # -------------------------
     for game in owned:
         appid = game["appid"]
@@ -97,37 +102,42 @@ def sync_user(steamid):
 
         hours = game.get("playtime_forever", 0) / 60
 
-        if appid in new_appids:
-            db.execute("INSERT OR IGNORE INTO owned_games (steamid, appid) VALUES (?,?)",
-                       (steamid, appid))
+        # Add owned game
+        db.execute("""
+            INSERT INTO owned_games (steamid, appid)
+            VALUES (%s, %s)
+            ON CONFLICT DO NOTHING
+        """, (steamid, appid))
 
-        row = db.execute("""
+        # Playtime
+        exists = db.execute("""
             SELECT id FROM player_hours
-            WHERE steamid=? AND appid=?
+            WHERE steamid=%s AND appid=%s
         """, (steamid, appid)).fetchone()
 
-        if row:
+        if exists:
             db.execute("""
                 UPDATE player_hours
-                SET hours=?, last_updated=?
-                WHERE steamid=? AND appid=?
+                SET hours=%s, last_updated=%s
+                WHERE steamid=%s AND appid=%s
             """, (hours, datetime.utcnow().isoformat(), steamid, appid))
         else:
             db.execute("""
                 INSERT INTO player_hours (steamid, appid, hours, last_updated)
-                VALUES (?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s)
             """, (steamid, appid, hours, datetime.utcnow().isoformat()))
 
+        # Metadata check
         row_meta = db.execute("""
             SELECT title, tags, cover_url, description
             FROM games
-            WHERE appid=?
+            WHERE appid=%s
         """, (appid,)).fetchone()
 
         if row_meta and (
-            row_meta["cover_url"] is not None or
-            row_meta["tags"] is not None or
-            row_meta["description"] is not None
+            row_meta["cover_url"] or
+            row_meta["tags"] or
+            row_meta["description"]
         ):
             continue
 
@@ -140,25 +150,25 @@ def sync_user(steamid):
         cover_sgdb_portrait = get_sgdb_vertical_cover(appid)
         cover_sgdb_poster = get_sgdb_poster(appid)
         cover_steam_vertical = get_steam_vertical_cover(appid)
-        cover_horizontal = meta.get("fallback_cover") if meta else None
+        fallback = meta.get("fallback_cover") if meta else None
 
         best_cover = (
             cover_sgdb_portrait or
             cover_sgdb_poster or
             cover_steam_vertical or
-            cover_horizontal
+            fallback
         )
 
         db.execute("""
             UPDATE games
             SET
-                title        = COALESCE(?, title),
-                cover_url    = COALESCE(?, cover_url),
-                description  = COALESCE(?, description),
-                genres       = COALESCE(?, genres),
-                release_year = COALESCE(?, release_year),
-                tags         = COALESCE(?, tags)
-            WHERE appid = ?
+                title        = COALESCE(%s, title),
+                cover_url    = COALESCE(%s, cover_url),
+                description  = COALESCE(%s, description),
+                genres       = COALESCE(%s, genres),
+                release_year = COALESCE(%s, release_year),
+                tags         = COALESCE(%s, tags)
+            WHERE appid=%s
         """, (
             meta.get("title") if meta else None,
             best_cover,
