@@ -28,139 +28,93 @@ def sync_user(steamid):
     print(f"[SYNC] Syncing user {steamid}...")
 
     # -------------------------
-    # 1. Update profile (fast)
+    # 1. Update profile
     # -------------------------
     profile = get_profile(steamid)
     if profile:
-        db.execute(
-            """
+        db.execute("""
             UPDATE users
             SET display_name = %s, avatar_url = %s
             WHERE steamid = %s
-            """,
-            (profile["personaname"], profile["avatarfull"], steamid)
-        )
+        """, (profile["personaname"], profile["avatarfull"], steamid))
 
     # -------------------------
-    # 2. Insert Non-Steam Games (fast)
+    # 2. Insert Non-Steam Games
     # -------------------------
     for appid, title in NON_STEAM_GAMES.items():
-        db.execute(
-            """
+        db.execute("""
             INSERT INTO owned_games (steamid, appid)
             VALUES (%s, %s)
             ON CONFLICT DO NOTHING
-            """,
-            (steamid, appid)
-        )
+        """, (steamid, appid))
 
-        # Insert minimal metadata (appid + title)
-        db.execute(
-            """
+        db.execute("""
             INSERT INTO games (appid, title)
             VALUES (%s, %s)
             ON CONFLICT DO NOTHING
-            """,
-            (appid, title)
-        )
+        """, (appid, title))
 
     db.commit()
 
     # -------------------------
-    # 3. Get steam library (fast)
+    # 3. Get Steam library
     # -------------------------
     owned = get_owned_games(steamid)
-    fresh_appids = {g["appid"] for g in owned}
+    steam_appids = {g["appid"] for g in owned}
 
-    cur = db.execute(
-        "SELECT appid FROM owned_games WHERE steamid=%s",
-        (steamid,)
-    )
-    existing_rows = cur.fetchall() or []
-    existing_appids = {row["appid"] for row in existing_rows}
-
-    # Games removed from Steam (ignore non-steam)
-    removed_appids = {
-        appid for appid in (existing_appids - fresh_appids)
-        if appid not in NON_STEAM_GAMES
-    }
-
-    for appid in removed_appids:
-        db.execute(
-            "DELETE FROM owned_games WHERE steamid=%s AND appid=%s",
-            (steamid, appid)
-        )
-        db.execute(
-            "DELETE FROM player_hours WHERE steamid=%s AND appid=%s",
-            (steamid, appid)
-        )
+    # Get all games user currently owns
+    cur = db.execute("SELECT appid FROM owned_games WHERE steamid=%s", (steamid,))
+    existing_appids = {row["appid"] for row in cur.fetchall() or []}
 
     # -------------------------
-    # 4. Sync hours + add new games (SUPER FAST)
+    # ❌ 4. NO MORE DELETION
+    # Manual games remain forever
+    # -------------------------
+
+    # -------------------------
+    # 5. Sync hours + add new games
     # -------------------------
     for game in owned:
         appid = game["appid"]
 
+        # Non-steam skip
         if appid in NON_STEAM_GAMES:
             continue
 
         hours = game.get("playtime_forever", 0) / 60
         timestamp = datetime.now(timezone.utc).isoformat()
 
-        # Add ownership
-        db.execute(
-            """
+        # Ensure user owns the game
+        db.execute("""
             INSERT INTO owned_games (steamid, appid)
             VALUES (%s, %s)
             ON CONFLICT DO NOTHING
-            """,
-            (steamid, appid)
-        )
+        """, (steamid, appid))
 
-        # Ensure game entry exists minimally (appid + title)
-        cur = db.execute(
-            "SELECT appid FROM games WHERE appid=%s",
-            (appid,)
-        )
-        exists_meta = cur.fetchone()
+        # Minimal metadata
+        db.execute("""
+            INSERT INTO games (appid, title)
+            VALUES (%s, %s)
+            ON CONFLICT DO NOTHING
+        """, (appid, game.get("name", None)))
 
-        if not exists_meta:
-            db.execute(
-                """
-                INSERT INTO games (appid, title)
-                VALUES (%s, %s)
-                ON CONFLICT DO NOTHING
-                """,
-                (appid, game.get("name", None))
-            )
-
-        # Check if hours already exist
-        cur = db.execute(
-            """
+        # Sync hours
+        cur = db.execute("""
             SELECT id FROM player_hours
             WHERE steamid=%s AND appid=%s
-            """,
-            (steamid, appid)
-        )
-        exists_hours = cur.fetchone()
+        """, (steamid, appid))
 
-        if exists_hours:
-            db.execute(
-                """
+        if cur.fetchone():
+            db.execute("""
                 UPDATE player_hours
                 SET hours=%s, last_updated=%s
                 WHERE steamid=%s AND appid=%s
-                """,
-                (hours, timestamp, steamid, appid)
-            )
+            """, (hours, timestamp, steamid, appid))
         else:
-            db.execute(
-                """
+            db.execute("""
                 INSERT INTO player_hours (steamid, appid, hours, last_updated)
                 VALUES (%s, %s, %s, %s)
-                """,
-                (steamid, appid, hours, timestamp)
-            )
+            """, (steamid, appid, hours, timestamp))
 
     db.commit()
-    print("[SYNC] ✔ Potato mode finished!")
+    print("[SYNC] ✔ Manual games preserved!")
