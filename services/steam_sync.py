@@ -77,14 +77,14 @@ def sync_user(steamid):
     for game in owned:
         appid = game["appid"]
 
-        # Non-steam skip
+        # Skip non-steam games
         if appid in NON_STEAM_GAMES:
             continue
 
-        hours = game.get("playtime_forever", 0) / 60
+        steam_hours = game.get("playtime_forever", 0) / 60
         timestamp = datetime.now(timezone.utc).isoformat()
 
-        # Ensure user owns the game
+        # Ensure ownership row exists
         db.execute("""
             INSERT INTO owned_games (steamid, appid)
             VALUES (%s, %s)
@@ -98,23 +98,29 @@ def sync_user(steamid):
             ON CONFLICT DO NOTHING
         """, (appid, game.get("name", None)))
 
-        # Sync hours
+        # ---- HOURS MERGE LOGIC ----
         cur = db.execute("""
-            SELECT id FROM player_hours
+            SELECT hours FROM player_hours
             WHERE steamid=%s AND appid=%s
         """, (steamid, appid))
+        row = cur.fetchone()
 
-        if cur.fetchone():
-            db.execute("""
-                UPDATE player_hours
-                SET hours=%s, last_updated=%s
-                WHERE steamid=%s AND appid=%s
-            """, (hours, timestamp, steamid, appid))
+        if row:
+            existing_hours = float(row["hours"] or 0)
+
+            # Only update if Steam hours are HIGHER
+            if steam_hours > existing_hours:
+                db.execute("""
+                    UPDATE player_hours
+                    SET hours=%s, last_updated=%s
+                    WHERE steamid=%s AND appid=%s
+                """, (steam_hours, timestamp, steamid, appid))
         else:
+            # No hours entry yet — insert fresh steam hours
             db.execute("""
                 INSERT INTO player_hours (steamid, appid, hours, last_updated)
                 VALUES (%s, %s, %s, %s)
-            """, (steamid, appid, hours, timestamp))
+            """, (steamid, appid, steam_hours, timestamp))
 
     db.commit()
-    print("[SYNC] ✔ Manual games preserved!")
+    print("[SYNC] ✔ Manual hours preserved, Steam hours only increase!")
