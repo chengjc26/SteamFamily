@@ -7,7 +7,6 @@ NON_STEAM_GAMES = {
     900002: "Crystal of Atlan",
     900003: "Legends of Runeterra",
     900004: "Nikke: Goddess of Victory",
-    900005: "Krunker FRVR",
     900006: "Minecraft",
     900007: "Bloxd.io",
     900008: "Fortnite",
