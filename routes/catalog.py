@@ -287,7 +287,8 @@ def family():
             games,
             key=lambda g: (
                 g["avg_rating"] if g["avg_rating"] is not None else -1,
-                -g["std_rating"]
+                -g["std_rating"],
+                g["total_hours"]
             ),
             reverse=True
         )
