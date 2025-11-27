@@ -15,7 +15,6 @@ NON_STEAM_GAMES = {
     900010: "Prodigy",
     900011: "Zenless Zone Zero",
     900012: "Valorant",
-    900013: "Fall Guys",
     900014: "Genshin Impact",
     900015: "AFK Journey",
     900016: "Roblox",
